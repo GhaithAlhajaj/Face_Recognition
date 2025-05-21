@@ -1,7 +1,4 @@
-# Use a fuller Python image (not slim) for better compatibility and fewer memory issues
-FROM python:3.10
-
-# Install necessary system packages to build dlib and support GUI (if needed)
+# Install system packages required for dlib
 RUN apt-get update && apt-get install -y \
     build-essential \
     cmake \
@@ -9,24 +6,15 @@ RUN apt-get update && apt-get install -y \
     liblapack-dev \
     libx11-dev \
     libgtk-3-dev \
-    libboost-all-dev \
     python3-dev \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
-WORKDIR /app
+# Upgrade pip, setuptools, wheel
+RUN pip install --upgrade pip setuptools wheel
 
-# Copy all project files to container
-COPY . .
+# Try binary install first, fallback to source if it fails
+RUN pip install dlib==19.24.2 --only-binary :all: || pip install dlib==19.24.2
 
-# Upgrade pip and install dependencies (try binary dlib first, fallback to source)
-RUN pip install --upgrade pip setuptools wheel \
- && pip install dlib==19.24.2 --only-binary :all: || pip install dlib==19.24.2 \
- && pip install -r requirements.txt
-
-# Expose Streamlit default port
-EXPOSE 8501
-
-# Run the Streamlit app
-CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
-
+# Install other Python dependencies
+COPY requirements.txt .
+RUN pip install -r requirements.txt
