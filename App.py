@@ -7,28 +7,41 @@ import cv2
 import io
 
 def recognize_faces(image, known_encodings, known_labels, tolerance=0.6):
-    image_np = cv2.resize(np.array(image.convert("RGB")), (640, 480))
-    # Optional: Grayscale for faster processing (uncomment if needed)
-    # image_np = cv2.cvtColor(image_np, cv2.COLOR_RGB2GRAY)
-    # image_np = cv2.cvtColor(image_np, cv2.COLOR_GRAY2RGB)
-    face_locations = face_recognition.face_locations(image_np, model="hog")
-    face_encodings = face_recognition.face_encodings(image_np, face_locations)
+    try:
+        # Convert to RGB and resize only if necessary
+        image_np = np.array(image.convert("RGB"))
+        # Resize only if image is larger than 640x480 to save processing time
+        if image_np.shape[0] > 480 or image_np.shape[1] > 640:
+            image_np = cv2.resize(image_np, (640, 480))
+        
+        # Detect face locations using HOG model
+        face_locations = face_recognition.face_locations(image_np, model="hog")
+        if not face_locations:
+            return image_np, []  # Return original image if no faces detected
 
-    results = []
-    annotated_image = image_np.copy()
+        face_encodings = face_recognition.face_encodings(image_np, face_locations)
+        if not face_encodings:
+            return image_np, []  # Return original image if no encodings generated
 
-    for (top, right, bottom, left), encoding in zip(face_locations, face_encodings):
-        distances = face_recognition.face_distance(known_encodings, encoding)
-        best_index = np.argmin(distances)
-        best_distance = distances[best_index]
-        label = known_labels[best_index] if best_distance <= tolerance else "Unknown"
+        results = []
+        annotated_image = image_np.copy()
 
-        cv2.rectangle(annotated_image, (left, top), (right, bottom), (0, 255, 0), 2)
-        cv2.putText(annotated_image, label, (left, top - 15),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-        results.append((label, best_distance))
+        for (top, right, bottom, left), encoding in zip(face_locations, face_encodings):
+            distances = face_recognition.face_distance(known_encodings, encoding)
+            best_index = np.argmin(distances)
+            best_distance = distances[best_index]
+            label = known_labels[best_index] if best_distance <= tolerance else "Unknown"
 
-    return Image.fromarray(annotated_image), results
+            # Draw rectangle and label
+            cv2.rectangle(annotated_image, (left, top), (right, bottom), (0, 255, 0), 2)
+            cv2.putText(annotated_image, label, (left, top - 15),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+            results.append((label, best_distance))
+
+        return Image.fromarray(annotated_image), results
+    except Exception as e:
+        st.error(f"⚠️ Error processing image: {str(e)}")
+        return image_np, []
 
 def main():
     st.set_page_config(
@@ -75,6 +88,8 @@ def main():
             try:
                 encodings = joblib.load("encodings.pkl")
                 labels = joblib.load("labels.pkl")
+                if not encodings or not labels:
+                    raise ValueError("Encodings or labels are empty")
                 return encodings, labels
             except Exception as e:
                 st.error(f"⚠️ Failed to load encodings or labels: {str(e)}")
